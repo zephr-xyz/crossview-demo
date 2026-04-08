@@ -373,14 +373,6 @@ body {
       <span class="stat-value" id="stat-targets">--</span>
     </div>
     <div class="stat-item">
-      <span class="stat-label">MODEL</span>
-      <span class="stat-value green">GEO2-v5</span>
-    </div>
-    <div class="stat-item">
-      <span class="stat-label">R@1</span>
-      <span class="stat-value green">90.7%</span>
-    </div>
-    <div class="stat-item">
       <span class="stat-label">EMBEDDING</span>
       <span class="stat-value">256-d</span>
     </div>
@@ -406,7 +398,7 @@ body {
         <div class="icon">&#9678;</div>
         <h3>SELECT A FACILITY</h3>
         <p>Click any marker on the map or search above to begin cross-view analysis.<br><br>
-        The Geo2 model predicts ground-level appearance from overhead imagery using learned cross-view embeddings.</p>
+        Cross-view embeddings predict ground-level appearance from overhead imagery.</p>
       </div>
     </div>
   </div>
@@ -458,7 +450,7 @@ fetch(CDN + '/data/pois.json')
 
 function initMarkers() {
   DATA.pois.forEach((poi, idx) => {
-    const marker = L.circleMarker([poi.lat, poi.lon], { ...MARKER_DEFAULT, bubblingMouseEvents: false });
+    const marker = L.circleMarker([poi.elat || poi.lat, poi.elon || poi.lon], { ...MARKER_DEFAULT, bubblingMouseEvents: false });
     marker.addTo(map);
     marker.on('click', () => {
       clearSearch();
@@ -486,7 +478,7 @@ function selectTarget(idx) {
   updateMarkerStyle(idx, MARKER_SELECTED);
 
   const poi = DATA.pois[idx];
-  map.flyTo([poi.lat, poi.lon], Math.max(map.getZoom(), 17), { duration: 0.5 });
+  map.flyTo([poi.elat || poi.lat, poi.elon || poi.lon], Math.max(map.getZoom(), 17), { duration: 0.5 });
 
   // Building polygon
   if (buildingLayer) { map.removeLayer(buildingLayer); buildingLayer = null; }
