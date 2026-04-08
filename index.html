@@ -96,6 +96,84 @@ body {
   color: var(--accent-amber);
   background: rgba(240,160,48,0.1);
 }
+.mode-btn.flagged {
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+  background: rgba(224,64,64,0.1);
+}
+
+.flag-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.flag-btn {
+  flex: 1;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 6px 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.flag-btn:hover { border-color: var(--accent-red); color: var(--accent-red); }
+.flag-btn.active {
+  border-color: var(--accent-red);
+  color: #fff;
+  background: var(--accent-red);
+}
+
+.flag-type-select {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 5px 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  outline: none;
+  flex: 1;
+}
+
+.flag-note {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 5px 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  outline: none;
+  flex: 2;
+}
+.flag-note::placeholder { color: var(--text-dim); }
+
+.flagged-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  margin-bottom: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent-red);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.flagged-item:hover { border-color: var(--accent-red); background: var(--bg-tertiary); }
+.flagged-type {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  padding: 1px 5px;
+  background: rgba(224,64,64,0.15);
+  color: var(--accent-red);
+  border: 1px solid rgba(224,64,64,0.3);
+  white-space: nowrap;
+}
 
 .main { display: flex; height: calc(100vh - 48px); }
 
@@ -380,6 +458,8 @@ body {
   <div class="header-right">
     <button class="mode-btn active" id="btn-explore" onclick="setMode('explore')">EXPLORE</button>
     <button class="mode-btn" id="btn-similar" onclick="setMode('similar')">FIND SIMILAR</button>
+    <button class="mode-btn" id="btn-flagged" onclick="showFlagged()">&#9873; FLAGGED <span id="flag-count">0</span></button>
+    <button class="mode-btn" id="btn-export" onclick="exportFlagged()" style="font-size:9px">EXPORT JSON</button>
   </div>
 </div>
 
@@ -417,6 +497,91 @@ let mode = 'explore';
 let buildingLayer = null;
 let similarMarkers = [];
 let searchActive = false;
+
+// Hard negative flagging — persisted in localStorage
+let flaggedPois = JSON.parse(localStorage.getItem('crossview-flagged') || '{}');
+function saveFlags() {
+  localStorage.setItem('crossview-flagged', JSON.stringify(flaggedPois));
+  document.getElementById('flag-count').textContent = Object.keys(flaggedPois).length;
+  const btn = document.getElementById('btn-flagged');
+  btn.classList.toggle('flagged', Object.keys(flaggedPois).length > 0);
+}
+function toggleFlag(poiId) {
+  const typeEl = document.getElementById('flag-type');
+  const noteEl = document.getElementById('flag-note');
+  if (flaggedPois[poiId]) {
+    delete flaggedPois[poiId];
+  } else {
+    const poi = DATA.pois.find(p => p.id === poiId);
+    flaggedPois[poiId] = {
+      type: typeEl ? typeEl.value : 'wrong_match',
+      note: noteEl ? noteEl.value : '',
+      sim: poi ? computeCrossViewSim(poi) : null,
+      name: poi ? poi.name : '',
+      cat: poi ? poi.cat : '',
+      ts: new Date().toISOString(),
+    };
+  }
+  saveFlags();
+  // Update button appearance
+  const btn = document.getElementById('flag-btn-main');
+  if (btn) {
+    btn.classList.toggle('active', !!flaggedPois[poiId]);
+    btn.textContent = flaggedPois[poiId] ? '\u2691 FLAGGED' : '\u2691 FLAG FAILURE';
+  }
+}
+function showFlagged() {
+  const ids = Object.keys(flaggedPois);
+  document.getElementById('panel-status').textContent = `${ids.length} FLAGGED`;
+  document.getElementById('panel-status').style.color = 'var(--accent-red)';
+  document.getElementById('panel-title').textContent = 'HARD NEGATIVE MINING';
+  const content = document.getElementById('panel-content');
+  if (ids.length === 0) {
+    content.innerHTML = '<div class="empty-state"><h3>NO FLAGGED POIS</h3><p>Click a marker and use FLAG FAILURE to mark hard negatives for training.</p></div>';
+    return;
+  }
+  content.innerHTML = '<div class="similar-list" style="padding-top:8px">' +
+    ids.map(id => {
+      const f = flaggedPois[id];
+      const idx = DATA.pois.findIndex(p => p.id === id);
+      return `
+        <div class="flagged-item" onclick="selectTarget(${idx})">
+          <div class="similar-info">
+            <div class="similar-name">${f.name || 'UNNAMED'}</div>
+            <div class="similar-meta">${f.note || f.type.replace(/_/g,' ')}</div>
+          </div>
+          <div class="flagged-type">${f.type.replace(/_/g,' ').toUpperCase()}</div>
+          <div class="similar-score" style="color:var(--accent-red)">${f.sim ? (f.sim*100).toFixed(0)+'%' : '--'}</div>
+        </div>`;
+    }).join('') + '</div>';
+}
+function exportFlagged() {
+  const ids = Object.keys(flaggedPois);
+  if (ids.length === 0) { alert('No flagged POIs to export.'); return; }
+  const exportData = ids.map(id => {
+    const f = flaggedPois[id];
+    const poi = DATA.pois.find(p => p.id === id);
+    return {
+      poi_id: id,
+      flag_type: f.type,
+      note: f.note,
+      cross_view_sim: f.sim,
+      name: f.name,
+      category: f.cat,
+      lat: poi ? poi.lat : null,
+      lon: poi ? poi.lon : null,
+      image_ids: poi ? poi.imgs : [],
+      flagged_at: f.ts,
+    };
+  });
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `hard_negatives_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 const MARKER_DEFAULT  = { fillColor: '#40c8d0', fillOpacity: 0.7, color: 'rgba(255,255,255,0.3)', weight: 1 };
 const MARKER_SELECTED = { fillColor: '#f0a030', fillOpacity: 1, color: '#f0a030', weight: 2 };
@@ -558,6 +723,21 @@ function renderTargetPanel(poi, idx) {
         <div class="conf-bar"><div class="conf-bar-fill ${simClass}" style="width:${simPct}%"></div></div>
         <div class="conf-value" style="color:${simColor}">${simPct}%</div>
       </div>
+    </div>
+
+    <div class="flag-row">
+      <button class="flag-btn ${flaggedPois[poi.id] ? 'active' : ''}" id="flag-btn-main"
+              onclick="toggleFlag('${poi.id}')">
+        &#9873; ${flaggedPois[poi.id] ? 'FLAGGED' : 'FLAG FAILURE'}
+      </button>
+      <select class="flag-type-select" id="flag-type">
+        <option value="wrong_match">WRONG MATCH</option>
+        <option value="low_confidence">LOW CONFIDENCE</option>
+        <option value="bad_image">BAD IMAGE</option>
+        <option value="wrong_building">WRONG BUILDING</option>
+        <option value="other">OTHER</option>
+      </select>
+      <input class="flag-note" id="flag-note" placeholder="optional note..." maxlength="100">
     </div>
 
     <div class="section-header" style="cursor:pointer" onclick="toggleSection('imagery-block')">
@@ -754,6 +934,9 @@ document.getElementById('search').addEventListener('input', function(e) {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeModal();
 });
+
+// Init flag count
+saveFlags();
 </script>
 
 </body>
