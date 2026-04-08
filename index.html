@@ -423,11 +423,13 @@ const MARKER_SELECTED = { fillColor: '#f0a030', fillOpacity: 1, color: '#f0a030'
 const MARKER_SIMILAR  = { fillColor: '#30d060', fillOpacity: 0.9, color: '#30d060', weight: 2, radius: 7 };
 
 // Init map
+const canvasRenderer = L.canvas({ padding: 0.5 });
 map = L.map('map', {
   center: [40.015, -105.27],
   zoom: 13,
   zoomControl: true,
   attributionControl: false,
+  preferCanvas: true,
 });
 
 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
@@ -450,7 +452,7 @@ fetch(CDN + '/data/pois.json')
 
 function initMarkers() {
   DATA.pois.forEach((poi, idx) => {
-    const marker = L.circleMarker([poi.elat || poi.lat, poi.elon || poi.lon], { ...MARKER_DEFAULT, bubblingMouseEvents: false });
+    const marker = L.circleMarker([poi.elat || poi.lat, poi.elon || poi.lon], { ...MARKER_DEFAULT, bubblingMouseEvents: false, renderer: canvasRenderer });
     marker.addTo(map);
     marker.on('click', () => {
       clearSearch();
