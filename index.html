@@ -99,7 +99,7 @@ body {
 
 .main { display: flex; height: calc(100vh - 48px); }
 
-#map { flex: 1; background: var(--bg-primary); }
+#map { flex: 1; background: var(--bg-primary); outline: none; }
 
 .panel {
   width: 440px;
@@ -480,7 +480,7 @@ function selectTarget(idx) {
   updateMarkerStyle(idx, MARKER_SELECTED);
 
   const poi = DATA.pois[idx];
-  map.setView([poi.elat || poi.lat, poi.elon || poi.lon], Math.max(map.getZoom(), 17), { animate: false });
+  map.setView([poi.elat || poi.lat, poi.elon || poi.lon], Math.max(map.getZoom(), 17), { animate: true, duration: 0.15 });
 
   // Building polygon
   if (buildingLayer) { map.removeLayer(buildingLayer); buildingLayer = null; }
@@ -683,8 +683,10 @@ function closeModal() {
 
 function clearSearch() {
   document.getElementById('search').value = '';
-  searchActive = false;
-  markers.forEach(m => m.setStyle({ fillOpacity: 0.7 }));
+  if (searchActive) {
+    searchActive = false;
+    markers.forEach(m => m.setStyle({ fillOpacity: 0.7 }));
+  }
 }
 
 // Search
