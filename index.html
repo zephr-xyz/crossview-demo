@@ -450,15 +450,27 @@ fetch(CDN + '/data/pois.json')
 
 function initMarkers() {
   DATA.pois.forEach((poi, idx) => {
-    const marker = L.circleMarker([poi.elat || poi.lat, poi.elon || poi.lon], { ...MARKER_DEFAULT, radius: 5, bubblingMouseEvents: false });
+    const marker = L.circleMarker([poi.elat || poi.lat, poi.elon || poi.lon], { ...MARKER_DEFAULT, radius: 5, interactive: false });
     marker.addTo(map);
-    marker.on('click', () => {
-      clearSearch();
-      selectTarget(idx);
-    });
     marker.poiIdx = idx;
     markers.push(marker);
     markerMap[poi.id] = marker;
+  });
+
+  // Single map click handler — find nearest POI within 20px
+  map.on('click', function(e) {
+    let bestIdx = -1, bestDist = Infinity;
+    const clickPt = map.latLngToContainerPoint(e.latlng);
+    for (let i = 0; i < markers.length; i++) {
+      const mPt = map.latLngToContainerPoint(markers[i].getLatLng());
+      const dx = clickPt.x - mPt.x, dy = clickPt.y - mPt.y;
+      const dist = dx * dx + dy * dy;
+      if (dist < bestDist) { bestDist = dist; bestIdx = i; }
+    }
+    if (bestIdx >= 0 && bestDist < 400) { // 20px radius = 400 squared
+      clearSearch();
+      selectTarget(bestIdx);
+    }
   });
 }
 
