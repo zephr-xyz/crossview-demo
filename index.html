@@ -376,8 +376,31 @@ body {
 
 .modal-overlay img {
   max-width: 90vw;
-  max-height: 90vh;
+  max-height: 85vh;
   border: 1px solid var(--border);
+}
+
+.modal-flag-btn {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10001;
+  background: var(--bg-secondary);
+  border: 2px solid var(--border);
+  color: var(--text-secondary);
+  padding: 10px 28px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.modal-flag-btn:hover { border-color: var(--accent-red); color: var(--accent-red); }
+.modal-flag-btn.flagged {
+  background: var(--accent-red);
+  border-color: var(--accent-red);
+  color: #fff;
 }
 </style>
 </head>
@@ -430,6 +453,7 @@ body {
 
 <div class="modal-overlay" id="modal" onclick="closeModal()">
   <img id="modal-img" src="">
+  <button class="modal-flag-btn" id="modal-flag-btn" onclick="toggleModalFlag(event)">&#10007; NOT THIS POI</button>
 </div>
 
 <script>
@@ -650,7 +674,7 @@ function renderTargetPanel(poi, idx) {
         <div class="imagery-label amber"><span class="dot amber"></span>STREET-LEVEL COLLECTION (${poi.imgs.length} IMAGES) &mdash; CLICK FOR HI-RES</div>
         <div class="ground-grid" style="grid-template-columns:repeat(${Math.min(poi.imgs.length, 3)}, 1fr)">
           ${poi.imgs.map((id, i) => `
-            <div class="ground-thumb ${flaggedImgs[id] ? 'flagged-img' : ''}" id="thumb-${id}" onclick="openModal('${CDN}/fullres/${id}.jpg')">
+            <div class="ground-thumb ${flaggedImgs[id] ? 'flagged-img' : ''}" id="thumb-${id}" onclick="openModal('${CDN}/fullres/${id}.jpg','${id}','${poi.id}')">
               <div class="rank">#${i+1}</div>
               <img src="${CDN}/thumbs/ground/${id}.jpg" alt="Ground ${i+1}" onerror="this.parentElement.style.display='none'">
               <div class="not-poi-toggle ${flaggedImgs[id] ? 'flagged' : ''}" id="flagbtn-${id}"
@@ -753,13 +777,32 @@ function haversine(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
-function openModal(src) {
+let modalImgId = null;
+let modalPoiId = null;
+
+function openModal(src, imgId, poiId) {
+  modalImgId = imgId;
+  modalPoiId = poiId;
   document.getElementById('modal-img').src = src;
   document.getElementById('modal').classList.add('active');
+  const btn = document.getElementById('modal-flag-btn');
+  const isFlagged = !!flaggedImgs[imgId];
+  btn.classList.toggle('flagged', isFlagged);
+  btn.textContent = isFlagged ? '\u2717 FLAGGED — NOT THIS POI' : '\u2717 NOT THIS POI';
 }
 
 function closeModal() {
   document.getElementById('modal').classList.remove('active');
+}
+
+function toggleModalFlag(evt) {
+  evt.stopPropagation(); // don't close modal
+  if (!modalImgId) return;
+  toggleImgFlag(modalImgId, modalPoiId, evt);
+  const btn = document.getElementById('modal-flag-btn');
+  const isFlagged = !!flaggedImgs[modalImgId];
+  btn.classList.toggle('flagged', isFlagged);
+  btn.textContent = isFlagged ? '\u2717 FLAGGED — NOT THIS POI' : '\u2717 NOT THIS POI';
 }
 
 function clearSearch() {
