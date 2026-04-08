@@ -96,84 +96,29 @@ body {
   color: var(--accent-amber);
   background: rgba(240,160,48,0.1);
 }
-.mode-btn.flagged {
-  border-color: var(--accent-red);
-  color: var(--accent-red);
-  background: rgba(224,64,64,0.1);
-}
-
-.flag-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--border);
-}
-
-.flag-btn {
-  flex: 1;
-  background: var(--bg-tertiary);
+.ground-thumb .not-poi-toggle {
+  position: absolute;
+  bottom: 3px;
+  right: 3px;
+  background: rgba(0,0,0,0.7);
   border: 1px solid var(--border);
-  color: var(--text-secondary);
-  padding: 6px 10px;
+  color: var(--text-dim);
   font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
-  letter-spacing: 0.5px;
+  font-size: 8px;
+  padding: 2px 5px;
   cursor: pointer;
+  z-index: 2;
   transition: all 0.2s;
+  line-height: 1.2;
 }
-.flag-btn:hover { border-color: var(--accent-red); color: var(--accent-red); }
-.flag-btn.active {
+.ground-thumb .not-poi-toggle:hover { border-color: var(--accent-red); color: var(--accent-red); }
+.ground-thumb .not-poi-toggle.flagged {
+  background: var(--accent-red);
   border-color: var(--accent-red);
   color: #fff;
-  background: var(--accent-red);
 }
-
-.flag-type-select {
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
-  color: var(--text-primary);
-  padding: 5px 6px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
-  outline: none;
-  flex: 1;
-}
-
-.flag-note {
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
-  color: var(--text-primary);
-  padding: 5px 8px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
-  outline: none;
-  flex: 2;
-}
-.flag-note::placeholder { color: var(--text-dim); }
-
-.flagged-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px;
-  margin-bottom: 4px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--accent-red);
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.flagged-item:hover { border-color: var(--accent-red); background: var(--bg-tertiary); }
-.flagged-type {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 9px;
-  padding: 1px 5px;
-  background: rgba(224,64,64,0.15);
-  color: var(--accent-red);
-  border: 1px solid rgba(224,64,64,0.3);
-  white-space: nowrap;
-}
+.ground-thumb.flagged-img { opacity: 0.4; }
+.ground-thumb.flagged-img .not-poi-toggle { opacity: 1; }
 
 .main { display: flex; height: calc(100vh - 48px); }
 
@@ -458,8 +403,7 @@ body {
   <div class="header-right">
     <button class="mode-btn active" id="btn-explore" onclick="setMode('explore')">EXPLORE</button>
     <button class="mode-btn" id="btn-similar" onclick="setMode('similar')">FIND SIMILAR</button>
-    <button class="mode-btn" id="btn-flagged" onclick="showFlagged()">&#9873; FLAGGED <span id="flag-count">0</span></button>
-    <button class="mode-btn" id="btn-export" onclick="exportFlagged()" style="font-size:9px">EXPORT JSON</button>
+    <button class="mode-btn" id="btn-export" onclick="exportFlagged()">EXPORT <span id="flag-count">0</span> FLAGGED</button>
   </div>
 </div>
 
@@ -498,87 +442,47 @@ let buildingLayer = null;
 let similarMarkers = [];
 let searchActive = false;
 
-// Hard negative flagging — persisted in localStorage
-let flaggedPois = JSON.parse(localStorage.getItem('crossview-flagged') || '{}');
-function saveFlags() {
-  localStorage.setItem('crossview-flagged', JSON.stringify(flaggedPois));
-  document.getElementById('flag-count').textContent = Object.keys(flaggedPois).length;
-  const btn = document.getElementById('btn-flagged');
-  btn.classList.toggle('flagged', Object.keys(flaggedPois).length > 0);
+// Per-image flagging — "not a photo of this POI" — persisted in localStorage
+let flaggedImgs = JSON.parse(localStorage.getItem('crossview-flagged-imgs') || '{}');
+function saveFlaggedImgs() {
+  localStorage.setItem('crossview-flagged-imgs', JSON.stringify(flaggedImgs));
+  document.getElementById('flag-count').textContent = Object.keys(flaggedImgs).length;
 }
-function toggleFlag(poiId) {
-  const typeEl = document.getElementById('flag-type');
-  const noteEl = document.getElementById('flag-note');
-  if (flaggedPois[poiId]) {
-    delete flaggedPois[poiId];
+function toggleImgFlag(imgId, poiId, evt) {
+  evt.stopPropagation(); // don't open hi-res modal
+  if (flaggedImgs[imgId]) {
+    delete flaggedImgs[imgId];
   } else {
-    const poi = DATA.pois.find(p => p.id === poiId);
-    flaggedPois[poiId] = {
-      type: typeEl ? typeEl.value : 'wrong_match',
-      note: noteEl ? noteEl.value : '',
-      sim: poi ? computeCrossViewSim(poi) : null,
-      name: poi ? poi.name : '',
-      cat: poi ? poi.cat : '',
-      ts: new Date().toISOString(),
-    };
+    flaggedImgs[imgId] = { poi_id: poiId, ts: new Date().toISOString() };
   }
-  saveFlags();
-  // Update button appearance
-  const btn = document.getElementById('flag-btn-main');
+  saveFlaggedImgs();
+  // Update thumbnail appearance
+  const thumb = document.getElementById('thumb-' + imgId);
+  const btn = document.getElementById('flagbtn-' + imgId);
+  if (thumb) thumb.classList.toggle('flagged-img', !!flaggedImgs[imgId]);
   if (btn) {
-    btn.classList.toggle('active', !!flaggedPois[poiId]);
-    btn.textContent = flaggedPois[poiId] ? '\u2691 FLAGGED' : '\u2691 FLAG FAILURE';
+    btn.classList.toggle('flagged', !!flaggedImgs[imgId]);
+    btn.textContent = flaggedImgs[imgId] ? '\u2717 NOT POI' : '\u2717';
   }
-}
-function showFlagged() {
-  const ids = Object.keys(flaggedPois);
-  document.getElementById('panel-status').textContent = `${ids.length} FLAGGED`;
-  document.getElementById('panel-status').style.color = 'var(--accent-red)';
-  document.getElementById('panel-title').textContent = 'HARD NEGATIVE MINING';
-  const content = document.getElementById('panel-content');
-  if (ids.length === 0) {
-    content.innerHTML = '<div class="empty-state"><h3>NO FLAGGED POIS</h3><p>Click a marker and use FLAG FAILURE to mark hard negatives for training.</p></div>';
-    return;
-  }
-  content.innerHTML = '<div class="similar-list" style="padding-top:8px">' +
-    ids.map(id => {
-      const f = flaggedPois[id];
-      const idx = DATA.pois.findIndex(p => p.id === id);
-      return `
-        <div class="flagged-item" onclick="selectTarget(${idx})">
-          <div class="similar-info">
-            <div class="similar-name">${f.name || 'UNNAMED'}</div>
-            <div class="similar-meta">${f.note || f.type.replace(/_/g,' ')}</div>
-          </div>
-          <div class="flagged-type">${f.type.replace(/_/g,' ').toUpperCase()}</div>
-          <div class="similar-score" style="color:var(--accent-red)">${f.sim ? (f.sim*100).toFixed(0)+'%' : '--'}</div>
-        </div>`;
-    }).join('') + '</div>';
 }
 function exportFlagged() {
-  const ids = Object.keys(flaggedPois);
-  if (ids.length === 0) { alert('No flagged POIs to export.'); return; }
-  const exportData = ids.map(id => {
-    const f = flaggedPois[id];
-    const poi = DATA.pois.find(p => p.id === id);
+  const entries = Object.entries(flaggedImgs);
+  if (entries.length === 0) { alert('No flagged images to export.'); return; }
+  const exportData = entries.map(([imgId, meta]) => {
+    const poi = DATA.pois.find(p => p.id === meta.poi_id);
     return {
-      poi_id: id,
-      flag_type: f.type,
-      note: f.note,
-      cross_view_sim: f.sim,
-      name: f.name,
-      category: f.cat,
-      lat: poi ? poi.lat : null,
-      lon: poi ? poi.lon : null,
-      image_ids: poi ? poi.imgs : [],
-      flagged_at: f.ts,
+      image_id: imgId,
+      poi_id: meta.poi_id,
+      poi_name: poi ? poi.name : '',
+      category: poi ? poi.cat : '',
+      flagged_at: meta.ts,
     };
   });
   const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `hard_negatives_${new Date().toISOString().slice(0,10)}.json`;
+  a.download = `flagged_images_${new Date().toISOString().slice(0,10)}.json`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -725,21 +629,6 @@ function renderTargetPanel(poi, idx) {
       </div>
     </div>
 
-    <div class="flag-row">
-      <button class="flag-btn ${flaggedPois[poi.id] ? 'active' : ''}" id="flag-btn-main"
-              onclick="toggleFlag('${poi.id}')">
-        &#9873; ${flaggedPois[poi.id] ? 'FLAGGED' : 'FLAG FAILURE'}
-      </button>
-      <select class="flag-type-select" id="flag-type">
-        <option value="wrong_match">WRONG MATCH</option>
-        <option value="low_confidence">LOW CONFIDENCE</option>
-        <option value="bad_image">BAD IMAGE</option>
-        <option value="wrong_building">WRONG BUILDING</option>
-        <option value="other">OTHER</option>
-      </select>
-      <input class="flag-note" id="flag-note" placeholder="optional note..." maxlength="100">
-    </div>
-
     <div class="section-header" style="cursor:pointer" onclick="toggleSection('imagery-block')">
       CROSS-VIEW IMAGERY ${mode === 'similar' ? '<span style=\\"float:right;font-size:9px\\">&#9660; CLICK TO EXPAND</span>' : ''}
     </div>
@@ -761,9 +650,11 @@ function renderTargetPanel(poi, idx) {
         <div class="imagery-label amber"><span class="dot amber"></span>STREET-LEVEL COLLECTION (${poi.imgs.length} IMAGES) &mdash; CLICK FOR HI-RES</div>
         <div class="ground-grid" style="grid-template-columns:repeat(${Math.min(poi.imgs.length, 3)}, 1fr)">
           ${poi.imgs.map((id, i) => `
-            <div class="ground-thumb" onclick="openModal('${CDN}/fullres/${id}.jpg')">
+            <div class="ground-thumb ${flaggedImgs[id] ? 'flagged-img' : ''}" id="thumb-${id}" onclick="openModal('${CDN}/fullres/${id}.jpg')">
               <div class="rank">#${i+1}</div>
               <img src="${CDN}/thumbs/ground/${id}.jpg" alt="Ground ${i+1}" onerror="this.parentElement.style.display='none'">
+              <div class="not-poi-toggle ${flaggedImgs[id] ? 'flagged' : ''}" id="flagbtn-${id}"
+                   onclick="toggleImgFlag('${id}','${poi.id}',event)">${flaggedImgs[id] ? '\u2717 NOT POI' : '\u2717'}</div>
             </div>
           `).join('')}
         </div>
@@ -936,7 +827,7 @@ document.addEventListener('keydown', e => {
 });
 
 // Init flag count
-saveFlags();
+saveFlaggedImgs();
 </script>
 
 </body>
