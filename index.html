@@ -472,30 +472,32 @@ function saveFlaggedImgs() {
   localStorage.setItem('crossview-flagged-imgs', JSON.stringify(flaggedImgs));
   document.getElementById('flag-count').textContent = Object.keys(flaggedImgs).length;
 }
+function flagKey(imgId, poiId) { return poiId + ':' + imgId; }
 function toggleImgFlag(imgId, poiId, evt) {
-  evt.stopPropagation(); // don't open hi-res modal
-  if (flaggedImgs[imgId]) {
-    delete flaggedImgs[imgId];
+  evt.stopPropagation();
+  const key = flagKey(imgId, poiId);
+  if (flaggedImgs[key]) {
+    delete flaggedImgs[key];
   } else {
-    flaggedImgs[imgId] = { poi_id: poiId, ts: new Date().toISOString() };
+    flaggedImgs[key] = { image_id: imgId, poi_id: poiId, ts: new Date().toISOString() };
   }
   saveFlaggedImgs();
-  // Update thumbnail appearance
-  const thumb = document.getElementById('thumb-' + imgId);
-  const btn = document.getElementById('flagbtn-' + imgId);
-  if (thumb) thumb.classList.toggle('flagged-img', !!flaggedImgs[imgId]);
+  const elId = poiId + '-' + imgId;
+  const thumb = document.getElementById('thumb-' + elId);
+  const btn = document.getElementById('flagbtn-' + elId);
+  if (thumb) thumb.classList.toggle('flagged-img', !!flaggedImgs[key]);
   if (btn) {
-    btn.classList.toggle('flagged', !!flaggedImgs[imgId]);
-    btn.textContent = flaggedImgs[imgId] ? '\u2717 NOT POI' : '\u2717';
+    btn.classList.toggle('flagged', !!flaggedImgs[key]);
+    btn.textContent = flaggedImgs[key] ? '\u2717 NOT POI' : '\u2717';
   }
 }
 function exportFlagged() {
   const entries = Object.entries(flaggedImgs);
   if (entries.length === 0) { alert('No flagged images to export.'); return; }
-  const exportData = entries.map(([imgId, meta]) => {
+  const exportData = entries.map(([key, meta]) => {
     const poi = DATA.pois.find(p => p.id === meta.poi_id);
     return {
-      image_id: imgId,
+      image_id: meta.image_id,
       poi_id: meta.poi_id,
       poi_name: poi ? poi.name : '',
       category: poi ? poi.cat : '',
@@ -673,14 +675,18 @@ function renderTargetPanel(poi, idx) {
       <div class="imagery-section">
         <div class="imagery-label amber"><span class="dot amber"></span>STREET-LEVEL COLLECTION (${poi.imgs.length} IMAGES) &mdash; CLICK FOR HI-RES</div>
         <div class="ground-grid" style="grid-template-columns:repeat(${Math.min(poi.imgs.length, 3)}, 1fr)">
-          ${poi.imgs.map((id, i) => `
-            <div class="ground-thumb ${flaggedImgs[id] ? 'flagged-img' : ''}" id="thumb-${id}" onclick="openModal('${CDN}/fullres/${id}.jpg','${id}','${poi.id}')">
+          ${poi.imgs.map((id, i) => {
+            const fk = flagKey(id, poi.id);
+            const elId = poi.id + '-' + id;
+            const isFlagged = !!flaggedImgs[fk];
+            return `
+            <div class="ground-thumb ${isFlagged ? 'flagged-img' : ''}" id="thumb-${elId}" onclick="openModal('${CDN}/fullres/${id}.jpg','${id}','${poi.id}')">
               <div class="rank">#${i+1}</div>
               <img src="${CDN}/thumbs/ground/${id}.jpg" alt="Ground ${i+1}" onerror="this.parentElement.style.display='none'">
-              <div class="not-poi-toggle ${flaggedImgs[id] ? 'flagged' : ''}" id="flagbtn-${id}"
-                   onclick="toggleImgFlag('${id}','${poi.id}',event)">${flaggedImgs[id] ? '\u2717 NOT POI' : '\u2717'}</div>
-            </div>
-          `).join('')}
+              <div class="not-poi-toggle ${isFlagged ? 'flagged' : ''}" id="flagbtn-${elId}"
+                   onclick="toggleImgFlag('${id}','${poi.id}',event)">${isFlagged ? '\u2717 NOT POI' : '\u2717'}</div>
+            </div>`;
+          }).join('')}
         </div>
       </div>
     </div>
@@ -786,7 +792,7 @@ function openModal(src, imgId, poiId) {
   document.getElementById('modal-img').src = src;
   document.getElementById('modal').classList.add('active');
   const btn = document.getElementById('modal-flag-btn');
-  const isFlagged = !!flaggedImgs[imgId];
+  const isFlagged = !!flaggedImgs[flagKey(imgId, poiId)];
   btn.classList.toggle('flagged', isFlagged);
   btn.textContent = isFlagged ? '\u2717 FLAGGED — NOT THIS POI' : '\u2717 NOT THIS POI';
 }
@@ -796,11 +802,11 @@ function closeModal() {
 }
 
 function toggleModalFlag(evt) {
-  evt.stopPropagation(); // don't close modal
+  evt.stopPropagation();
   if (!modalImgId) return;
   toggleImgFlag(modalImgId, modalPoiId, evt);
   const btn = document.getElementById('modal-flag-btn');
-  const isFlagged = !!flaggedImgs[modalImgId];
+  const isFlagged = !!flaggedImgs[flagKey(modalImgId, modalPoiId)];
   btn.classList.toggle('flagged', isFlagged);
   btn.textContent = isFlagged ? '\u2717 FLAGGED — NOT THIS POI' : '\u2717 NOT THIS POI';
 }
